@@ -90,7 +90,7 @@ Reply to them based on the context above.
     const content = await getMessageContent(promptText, files);
 
     // Mastra Agent generate accepts string or message content
-    const response = await replyAgent.generate(content);
+    const response = await replyAgent.generate([{ role: "user", content }]);
     let replyText = response.text;
 
     // Handle Reaction
@@ -147,7 +147,7 @@ Should Ai-chan reply to this? Output YES or NO.
             // Pass images to judge as well
             const judgeContent = await getMessageContent(judgePromptText, target.files);
 
-            const judgeResponse = await replyJudgeAgent.generate(judgeContent);
+            const judgeResponse = await replyJudgeAgent.generate([{ role: "user", content: judgeContent }]);
             const decision = judgeResponse.text.trim(); // Don't uppercase yet to preserve emoji case if needed, though usually lowercase
 
             if (decision.startsWith("REACTION:")) {
@@ -182,7 +182,7 @@ Generate a reply to encourage conversation.
 `;
             const generateContent = await getMessageContent(generatePromptText, target.files);
 
-            const response = await replyAgent.generate(generateContent);
+            const response = await replyAgent.generate([{ role: "user", content: generateContent }]);
             let replyText = response.text;
 
             // Handle Reaction
