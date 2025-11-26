@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "mastra dev",
-    "build": "mastra build && mkdir -p public",
+    "build": "mastra build && mkdir -p public && echo 'User-agent: *' > public/robots.txt",
     "start:digest": "ts-node src/scripts/runDailyDigest.ts",
     "lint": "eslint 'src/**/*.{ts,tsx}'",
     "tsc": "tsc"
