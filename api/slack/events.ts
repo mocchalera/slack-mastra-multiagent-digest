@@ -9,6 +9,12 @@ export default async function handler(req: any, res: any) {
             return res.status(405).json({ error: 'Method not allowed' });
         }
 
+        // Check for retries
+        if (req.headers['x-slack-retry-num']) {
+            console.log("[Events API] Ignoring retry:", req.headers['x-slack-retry-num']);
+            return res.status(200).json({ ok: true });
+        }
+
         const body = req.body;
         console.log("[Events API] Body:", JSON.stringify(body));
 
