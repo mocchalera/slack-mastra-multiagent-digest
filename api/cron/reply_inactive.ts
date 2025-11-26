@@ -8,6 +8,14 @@ export default async function handler(req: any, res: any) {
         }
         const channelIds = channelIdsEnv.split(",").map((id) => id.trim()).filter(Boolean);
 
+        // Execution Jitter: Run roughly once an hour (25% chance every 15 mins)
+        // This avoids robotic "on the hour" behavior.
+        const EXECUTION_PROBABILITY = 0.25;
+        if (Math.random() > EXECUTION_PROBABILITY) {
+            console.log("[Cron] Skipping execution due to jitter.");
+            return res.status(200).json({ skipped: true });
+        }
+
         await checkAndReplyInactive(channelIds);
 
         return res.status(200).json({ success: true });
