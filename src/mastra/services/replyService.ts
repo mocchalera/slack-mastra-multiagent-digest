@@ -1,25 +1,81 @@
 import { slackClient } from "../../slack/client.js";
 import { replyAgent } from "../agents/replyAgent.js";
 import { replyJudgeAgent } from "../agents/replyJudgeAgent.js";
+import { downloadSlackFile } from "../../slack/utils/fileUtils.js";
+
+async function getMessageContent(text: string, files: any[] | undefined): Promise<any> {
+    const content: any[] = [{ type: "text", text }];
+    if (files) {
+        for (const file of files) {
+            if (file.mimetype?.startsWith("image/") && file.url_private) {
+                try {
+                    console.log(`[replyService] Downloading image: ${file.name}`);
+                    const imageBuffer = await downloadSlackFile(file.url_private);
+                    content.push({ type: "image", image: imageBuffer });
+                } catch (error) {
+                    console.error(`[replyService] Failed to download image ${file.name}:`, error);
+                }
+            }
+        }
+    }
+    return content;
+}
+
+async function fetchThreadHistory(channel: string, ts: string): Promise<string> {
+    try {
+        const result = await slackClient.conversations.replies({
+            channel,
+            ts,
+            limit: 10, // Limit context to last 10 messages
+        });
+
+        if (!result.messages) return "";
+
+        return result.messages
+            .map((msg) => {
+                const user = msg.user || "Unknown";
+                const text = msg.text || "";
+                return `User <@${user}>: ${text}`;
+            })
+            .join("\n");
+    } catch (error) {
+        console.error(`[replyService] Failed to fetch thread history:`, error);
+        return "";
+    }
+}
 
 export async function handleMention(event: any) {
-    const { text, user, channel, ts, thread_ts } = event;
+    const { text, user, channel, ts, thread_ts, files } = event;
+
+    // Determine the thread timestamp.
+    // If thread_ts is present, we are in a thread.
+    // If not, the message itself (ts) is the start of the thread (or a standalone message).
+    const threadTimestamp = thread_ts || ts;
+
+    // Fetch history
+    const history = await fetchThreadHistory(channel, threadTimestamp);
 
     // Remove the mention from text (e.g. <@U12345>)
     const cleanText = text.replace(/<@[^>]+>/g, "").trim();
 
-    const prompt = `
+    const promptText = `
+Current Thread History:
+${history}
+
 User <@${user}> said: "${cleanText}"
-Reply to them.
+Reply to them based on the context above.
 `;
 
-    const response = await replyAgent.generate(prompt);
+    const content = await getMessageContent(promptText, files);
+
+    // Mastra Agent generate accepts string or message content
+    const response = await replyAgent.generate(content);
     const replyText = response.text;
 
     await slackClient.chat.postMessage({
         channel,
         text: replyText,
-        thread_ts: thread_ts || ts, // Reply in thread if it was a thread, or start a thread
+        thread_ts: threadTimestamp,
     });
 }
 
@@ -58,13 +114,16 @@ export async function checkAndReplyInactive(channelIds: string[]) {
             console.log(`[replyService] Found inactive post by ${target.user}: ${target.text}`);
 
             // 1. Judge
-            const judgePrompt = `
+            const judgePromptText = `
 Post by <@${target.user}>:
 "${target.text}"
 
 Should Ai-chan reply to this? Output YES or NO.
 `;
-            const judgeResponse = await replyJudgeAgent.generate(judgePrompt);
+            // Pass images to judge as well
+            const judgeContent = await getMessageContent(judgePromptText, target.files);
+
+            const judgeResponse = await replyJudgeAgent.generate(judgeContent);
             const decision = judgeResponse.text.trim().toUpperCase();
 
             if (decision !== "YES") {
@@ -73,14 +132,15 @@ Should Ai-chan reply to this? Output YES or NO.
             }
 
             // 2. Generate Reply
-            const generatePrompt = `
+            const generatePromptText = `
 Found an inactive post by <@${target.user}>:
 "${target.text}"
 
 Generate a reply to encourage conversation.
 `;
+            const generateContent = await getMessageContent(generatePromptText, target.files);
 
-            const response = await replyAgent.generate(generatePrompt);
+            const response = await replyAgent.generate(generateContent);
             const replyText = response.text;
 
             await slackClient.chat.postMessage({
