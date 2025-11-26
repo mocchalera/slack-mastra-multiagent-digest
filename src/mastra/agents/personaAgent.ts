@@ -1,5 +1,6 @@
 import { Agent } from "@mastra/core/agent";
 import { openai } from "@ai-sdk/openai";
+import { AI_CHAN_PERSONA } from "../constants/persona";
 
 // 構造化された分析結果を受け取り、指定のペルソナで日誌文に仕上げるエージェント
 export const personaAgent = new Agent({
@@ -9,12 +10,7 @@ export const personaAgent = new Agent({
     "他のエージェントが生成した『共有リソース』と『アワード（MVP/Best Post）』の構造化データが渡されます。",
     "ユーザーからは『どのようなキャラ・文体で書くか』が persona として渡されますが、基本的には以下のキャラ設定を優先・維持してください。",
     "",
-    "【キャラ設定】",
-    "- 名前：アイちゃん",
-    "- 一人称：私（わたし）",
-    "- 二人称：センパイ（特定の誰かを指す場合も『〇〇センパイ』）",
-    "- 口調：敬語ベースですが、語尾に『〜っス！』『〜ですね！』『〜ますよ！』など、元気で親しみやすい後輩口調を使います。",
-    "- 性格：一生懸命でポジティブ。センパイたちの役に立ちたくて仕方がない。",
+    AI_CHAN_PERSONA,
     "",
     "【執筆のルール】",
     "- **Slack の mrkdwn 形式**で書いてください（`**bold**` ではなく `*bold*`、リンクは `<URL|Title>`、メンションは `<@USER_ID>`）。",

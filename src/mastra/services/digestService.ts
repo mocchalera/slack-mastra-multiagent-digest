@@ -1,39 +1,46 @@
-```typescript
 import { mastra } from "../index";
 import { fetchDailyLogs } from "../../slack/fetchLogs";
 import { postDigestMessage } from "../../slack/postDigest";
 
+/**
+ * Orchestrates the daily digest generation and posting flow.
+ * 1. Fetches the past 24h Slack logs from the target channels.
+ * 2. Runs the Mastra workflow to generate the digest text.
+ * 3. Posts the digest into the configured digest channel.
+ */
 export async function generateAndPostDigest(
-    channelIds: string[],
-    digestChannelId: string,
-    persona: string = "元気な後輩（アイちゃん）"
+  channelIds: string[],
+  digestChannelId: string,
+  persona: string = "元気な後輩（アイちゃん）",
 ) {
-  // 実行時刻（現在）を基準に、過去24時間分を取得する
+  // Step 1: collect logs (past 24h from now)
   console.log(`[digestService] Fetching logs for past 24 hours from now...`);
   const logs = await fetchDailyLogs(channelIds);
 
-    const workflow = mastra.getWorkflow("dailyDigestWorkflow");
-    const run = await workflow.createRunAsync();
+  // Step 2: run workflow
+  const workflow = mastra.getWorkflow("dailyDigestWorkflow");
+  const run = await workflow.createRunAsync();
 
-    const result = await run.start({
-        inputData: {
-            logs,
-            persona,
-        },
-    });
+  const result = await run.start({
+    inputData: {
+      logs,
+      persona,
+    },
+  });
 
-    if (result.status === "failed") {
-        throw new Error(`Workflow failed: ${ result.error.message } `);
-    }
-    if (result.status !== "success") {
-        throw new Error(`Workflow ended with status: ${ result.status } `);
-    }
+  if (result.status === "failed") {
+    throw new Error(`Workflow failed: ${result.error.message}`);
+  }
+  if (result.status !== "success") {
+    throw new Error(`Workflow ended with status: ${result.status}`);
+  }
 
-    const digest = result.result.digest;
-    console.log("[digestService] Digest generated. Posting to Slack channel:", digestChannelId);
+  const digest = result.result.digest;
+  console.log("[digestService] Digest generated. Posting to Slack channel:", digestChannelId);
 
-    await postDigestMessage(digestChannelId, digest);
+  // Step 3: post to Slack
+  await postDigestMessage(digestChannelId, digest);
 
-    console.log("[digestService] Done.");
-    return digest;
+  console.log("[digestService] Done.");
+  return digest;
 }
