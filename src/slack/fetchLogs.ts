@@ -36,6 +36,7 @@ export async function fetchTodayLogs(channelIds: string[]): Promise<string> {
 
         const messages = res.messages ?? [];
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         for (const message of messages as any[]) {
           if (message.type !== "message") continue;
           if (message.subtype) continue; // bot_message 等を除外
@@ -64,8 +65,9 @@ Content: ${text}
 
         cursor = res.response_metadata?.next_cursor;
       } while (cursor);
-    } catch (error: any) {
-      console.warn(`[Warning] Failed to fetch logs for channel ${channel}: ${error.message}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.warn(`[Warning] Failed to fetch logs for channel ${channel}: ${errorMessage}`);
       // Continue to next channel
     }
   }

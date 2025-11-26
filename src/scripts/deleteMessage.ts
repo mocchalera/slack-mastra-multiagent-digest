@@ -22,8 +22,9 @@ async function main() {
             ts,
         });
         console.log("Successfully deleted message.");
-    } catch (error: any) {
-        console.error("Failed to delete message:", error.message);
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error("Failed to delete message:", errorMessage);
         console.error(error);
     }
 }
