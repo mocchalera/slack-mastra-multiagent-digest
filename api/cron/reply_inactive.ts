@@ -1,4 +1,4 @@
-import { checkAndReplyInactive } from '../../src/mastra/services/replyService';
+import { checkAndReplyInactive } from '../../src/mastra/services/replyService.js';
 
 export default async function handler(req: any, res: any) {
     try {

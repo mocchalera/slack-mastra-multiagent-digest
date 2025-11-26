@@ -1,4 +1,4 @@
-import { generateAndPostDigest } from "../src/mastra/services/digestService";
+import { generateAndPostDigest } from "../src/mastra/services/digestService.js";
 
 export default async function handler(req: any, res: any) {
     try {

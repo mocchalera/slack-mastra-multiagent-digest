@@ -1,6 +1,6 @@
 import { Agent } from "@mastra/core/agent";
 import { openai } from "@ai-sdk/openai";
-import { AI_CHAN_PERSONA } from "../constants/persona";
+import { AI_CHAN_PERSONA } from "../constants/persona.js";
 
 // 構造化された分析結果を受け取り、指定のペルソナで日誌文に仕上げるエージェント
 export const personaAgent = new Agent({

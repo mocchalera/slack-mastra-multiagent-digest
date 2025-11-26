@@ -1,6 +1,6 @@
 import { Agent } from "@mastra/core/agent";
 import { openai } from "@ai-sdk/openai";
-import { AI_CHAN_PERSONA } from "../constants/persona";
+import { AI_CHAN_PERSONA } from "../constants/persona.js";
 
 export const replyAgent = new Agent({
     name: "reply-agent",

@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import { handleMention } from '../../src/mastra/services/replyService';
+import { handleMention } from '../../src/mastra/services/replyService.js';
 
 export default async function handler(req: any, res: any) {
     console.log("[Events API] Received request:", req.method);

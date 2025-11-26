@@ -1,6 +1,6 @@
-import { mastra } from "../index";
-import { fetchDailyLogs } from "../../slack/fetchLogs";
-import { postDigestMessage } from "../../slack/postDigest";
+import { mastra } from "../index.js";
+import { fetchDailyLogs } from "../../slack/fetchLogs.js";
+import { postDigestMessage } from "../../slack/postDigest.js";
 
 /**
  * Orchestrates the daily digest generation and posting flow.

@@ -1,6 +1,6 @@
-import { slackClient } from "../../slack/client";
-import { replyAgent } from "../agents/replyAgent";
-import { replyJudgeAgent } from "../agents/replyJudgeAgent";
+import { slackClient } from "../../slack/client.js";
+import { replyAgent } from "../agents/replyAgent.js";
+import { replyJudgeAgent } from "../agents/replyJudgeAgent.js";
 
 export async function handleMention(event: any) {
     const { text, user, channel, ts, thread_ts } = event;
