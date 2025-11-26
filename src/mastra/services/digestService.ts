@@ -1,5 +1,6 @@
+```typescript
 import { mastra } from "../index";
-import { fetchTodayLogs } from "../../slack/fetchLogs";
+import { fetchDailyLogs } from "../../slack/fetchLogs";
 import { postDigestMessage } from "../../slack/postDigest";
 
 export async function generateAndPostDigest(
@@ -7,8 +8,9 @@ export async function generateAndPostDigest(
     digestChannelId: string,
     persona: string = "元気な後輩（アイちゃん）"
 ) {
-    console.log("[digestService] Fetching logs for channels:", channelIds.join(", "));
-    const logs = await fetchTodayLogs(channelIds);
+  // 実行時刻（現在）を基準に、過去24時間分を取得する
+  console.log(`[digestService] Fetching logs for past 24 hours from now...`);
+  const logs = await fetchDailyLogs(channelIds);
 
     const workflow = mastra.getWorkflow("dailyDigestWorkflow");
     const run = await workflow.createRunAsync();
@@ -21,10 +23,10 @@ export async function generateAndPostDigest(
     });
 
     if (result.status === "failed") {
-        throw new Error(`Workflow failed: ${result.error.message}`);
+        throw new Error(`Workflow failed: ${ result.error.message } `);
     }
     if (result.status !== "success") {
-        throw new Error(`Workflow ended with status: ${result.status}`);
+        throw new Error(`Workflow ended with status: ${ result.status } `);
     }
 
     const digest = result.result.digest;

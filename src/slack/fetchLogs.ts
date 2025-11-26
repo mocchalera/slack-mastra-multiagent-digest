@@ -8,12 +8,19 @@ import { ConversationsHistoryResponse } from "@slack/web-api";
 //   - ワークスペースのタイムゾーンに合わせる
 //   - メッセージ量に応じたフィルタリング
 //   などの調整が必要です。
-export async function fetchTodayLogs(channelIds: string[]): Promise<string> {
-  const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+export async function fetchDailyLogs(channelIds: string[], targetDate?: Date): Promise<string> {
+  // 基準日時（指定がなければ現在時刻＝実行時刻）
+  // Cronで 21:00 JST に実行される場合、ここが 21:00 JST になる
+  const endTime = targetDate || new Date();
 
-  const oldest = (startOfDay.getTime() / 1000).toString();
-  const latest = ((startOfDay.getTime() + 24 * 60 * 60 * 1000) / 1000).toString();
+  // 終了時刻 (Unix Timestamp)
+  const endTimestamp = endTime.getTime() / 1000;
+
+  // 開始時刻 (24時間前)
+  const startTimestamp = endTimestamp - 24 * 60 * 60;
+
+  const oldest = startTimestamp.toString();
+  const latest = endTimestamp.toString();
 
   const lines: string[] = [];
 
