@@ -2,6 +2,7 @@
   "name": "slack-mastra-multiagent-digest",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "mastra dev",
     "build": "mastra build && mkdir -p public && echo 'User-agent: *' > public/robots.txt",
