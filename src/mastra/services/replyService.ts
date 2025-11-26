@@ -3,6 +3,23 @@ import { replyAgent } from "../agents/replyAgent.js";
 import { replyJudgeAgent } from "../agents/replyJudgeAgent.js";
 import { downloadSlackFile } from "../../slack/utils/fileUtils.js";
 
+const userCache = new Map<string, string>();
+
+async function resolveUserName(userId: string): Promise<string> {
+    if (!userId) return "Unknown";
+    if (userCache.has(userId)) return userCache.get(userId)!;
+
+    try {
+        const info = await slackClient.users.info({ user: userId });
+        const name = info.user?.profile?.display_name || info.user?.real_name || "Unknown";
+        userCache.set(userId, name);
+        return name;
+    } catch (error) {
+        console.error(`[replyService] Failed to resolve user ${userId}:`, error);
+        return "Unknown";
+    }
+}
+
 async function getMessageContent(text: string, files: any[] | undefined): Promise<any> {
     const content: any[] = [{ type: "text", text }];
     if (files) {
@@ -31,13 +48,14 @@ async function fetchThreadHistory(channel: string, ts: string): Promise<string> 
 
         if (!result.messages) return "";
 
-        return result.messages
-            .map((msg) => {
-                const user = msg.user || "Unknown";
-                const text = msg.text || "";
-                return `User <@${user}>: ${text}`;
-            })
-            .join("\n");
+        // Resolve all user names in parallel
+        const messages = await Promise.all(result.messages.map(async (msg) => {
+            const user = msg.user ? await resolveUserName(msg.user) : "Unknown";
+            const text = msg.text || "";
+            return `User ${user}: ${text}`;
+        }));
+
+        return messages.join("\n");
     } catch (error) {
         console.error(`[replyService] Failed to fetch thread history:`, error);
         return "";
@@ -79,11 +97,13 @@ export async function handleMention(event: any) {
     // Remove the mention from text (e.g. <@U12345>)
     const cleanText = text.replace(/<@[^>]+>/g, "").trim();
 
+    const userName = await resolveUserName(user);
+
     const promptText = `
 Current Thread History:
 ${history}
 
-User <@${user}> said: "${cleanText}"
+User ${userName} said: "${cleanText}"
 Reply to them based on the context above.
 `;
 
@@ -137,9 +157,11 @@ export async function checkAndReplyInactive(channelIds: string[]) {
 
             console.log(`[replyService] Found inactive post by ${target.user}: ${target.text}`);
 
+            const userName = await resolveUserName(target.user || "");
+
             // 1. Judge
             const judgePromptText = `
-Post by <@${target.user}>:
+Post by ${userName}:
 "${target.text}"
 
 Should Ai-chan reply to this? Output YES or NO.
@@ -175,7 +197,7 @@ Should Ai-chan reply to this? Output YES or NO.
 
             // 2. Generate Reply
             const generatePromptText = `
-Found an inactive post by <@${target.user}>:
+Found an inactive post by ${userName}:
 "${target.text}"
 
 Generate a reply to encourage conversation.
