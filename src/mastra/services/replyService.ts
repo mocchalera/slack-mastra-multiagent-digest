@@ -44,6 +44,27 @@ async function fetchThreadHistory(channel: string, ts: string): Promise<string> 
     }
 }
 
+// Helper to handle reactions
+async function handleReaction(text: string, channel: string, ts: string): Promise<string> {
+    const reactionMatch = text.match(/^\[REACTION: :(.+?):\]/);
+    if (reactionMatch) {
+        const reactionName = reactionMatch[1];
+        console.log(`[replyService] Adding reaction: ${reactionName} to ${ts}`);
+        try {
+            await slackClient.reactions.add({
+                channel,
+                name: reactionName,
+                timestamp: ts,
+            });
+        } catch (error) {
+            console.error(`[replyService] Failed to add reaction ${reactionName}:`, error);
+        }
+        // Remove the tag from the text
+        return text.replace(/^\[REACTION: :.+?:\]\s*/, "");
+    }
+    return text;
+}
+
 export async function handleMention(event: any) {
     const { text, user, channel, ts, thread_ts, files } = event;
 
@@ -70,7 +91,10 @@ Reply to them based on the context above.
 
     // Mastra Agent generate accepts string or message content
     const response = await replyAgent.generate(content);
-    const replyText = response.text;
+    let replyText = response.text;
+
+    // Handle Reaction
+    replyText = await handleReaction(replyText, channel, ts); // React to the original message (ts), not thread_ts
 
     await slackClient.chat.postMessage({
         channel,
@@ -124,9 +148,27 @@ Should Ai-chan reply to this? Output YES or NO.
             const judgeContent = await getMessageContent(judgePromptText, target.files);
 
             const judgeResponse = await replyJudgeAgent.generate(judgeContent);
-            const decision = judgeResponse.text.trim().toUpperCase();
+            const decision = judgeResponse.text.trim(); // Don't uppercase yet to preserve emoji case if needed, though usually lowercase
 
-            if (decision !== "YES") {
+            if (decision.startsWith("REACTION:")) {
+                const reactionMatch = decision.match(/REACTION: :(.+?):/);
+                if (reactionMatch) {
+                    const reactionName = reactionMatch[1];
+                    console.log(`[replyService] Judge decided to react only: ${reactionName} to ${target.ts}`);
+                    try {
+                        await slackClient.reactions.add({
+                            channel: channelId,
+                            name: reactionName,
+                            timestamp: target.ts || "",
+                        });
+                    } catch (error) {
+                        console.error(`[replyService] Failed to add reaction ${reactionName}:`, error);
+                    }
+                }
+                continue; // Skip text reply
+            }
+
+            if (decision.toUpperCase() !== "YES") {
                 console.log(`[replyService] Skipped replying to ${target.ts} (Judge decided: ${decision})`);
                 continue;
             }
@@ -141,7 +183,10 @@ Generate a reply to encourage conversation.
             const generateContent = await getMessageContent(generatePromptText, target.files);
 
             const response = await replyAgent.generate(generateContent);
-            const replyText = response.text;
+            let replyText = response.text;
+
+            // Handle Reaction
+            replyText = await handleReaction(replyText, channelId, target.ts || "");
 
             await slackClient.chat.postMessage({
                 channel: channelId,
