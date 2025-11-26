@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "mastra dev",
-    "build": "mastra build",
+    "build": "mastra build && mkdir -p public",
     "start:digest": "ts-node src/scripts/runDailyDigest.ts",
     "lint": "eslint 'src/**/*.{ts,tsx}'",
     "tsc": "tsc"
