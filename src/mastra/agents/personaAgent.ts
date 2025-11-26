@@ -21,5 +21,5 @@ export const personaAgent = new Agent({
     "- MVP や Best Post に選ばれたセンパイを、思いっきり褒め称えてください！",
     "- 最後に必ず、センパイへの労いの言葉を一言添えてください。"
   ],
-  model: openai("gpt-5.1"),
+  model: openai(process.env.MASTRA_AGENT_MODEL_PERSONA || "gpt-4o"),
 });

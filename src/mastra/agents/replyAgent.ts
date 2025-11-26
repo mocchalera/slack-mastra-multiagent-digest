@@ -21,5 +21,5 @@ export const replyAgent = new Agent({
         "- 短く、読みやすく、親しみやすく。",
         "- 相手の名前がわかる場合は「〇〇センパイ」と呼んでください（`<@USER_ID>` メンションも活用）。",
     ],
-    model: openai("gpt-4o"),
+    model: openai(process.env.MASTRA_AGENT_MODEL_REPLY || "gpt-4o"),
 });

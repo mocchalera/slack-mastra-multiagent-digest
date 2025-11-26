@@ -20,5 +20,5 @@ export const awardAgent = new Agent({
         "   - その投稿のリンク (permalink) も必ず含めてください。",
         "   - 選出理由 (best_post_reason) も記述してください。"
     ],
-    model: openai("gpt-4o-mini"),
+    model: openai(process.env.MASTRA_AGENT_MODEL_AWARD || "gpt-4o-mini"),
 });

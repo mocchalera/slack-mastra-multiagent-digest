@@ -12,5 +12,5 @@ export const resourceAgent = new Agent({
         "出力は JSON で返すことを想定しており、ResourceSchema に従います。",
         "各リソースには、タイトル、要約（なぜ重要か）、シェアした人 (contributor)、その人のID (contributor_id)、元投稿へのリンク (permalink)、関連タグ（#LLM, #ImageGen など）を付与してください。"
     ],
-    model: openai("gpt-4o-mini"),
+    model: openai(process.env.MASTRA_AGENT_MODEL_RESOURCE || "gpt-4o-mini"),
 });

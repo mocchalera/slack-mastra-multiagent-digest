@@ -1,5 +1,6 @@
 import { slackClient } from "../../slack/client";
 import { replyAgent } from "../agents/replyAgent";
+import { replyJudgeAgent } from "../agents/replyJudgeAgent";
 
 export async function handleMention(event: any) {
     const { text, user, channel, ts, thread_ts } = event;
@@ -56,14 +57,30 @@ export async function checkAndReplyInactive(channelIds: string[]) {
 
             console.log(`[replyService] Found inactive post by ${target.user}: ${target.text}`);
 
-            const prompt = `
+            // 1. Judge
+            const judgePrompt = `
+Post by <@${target.user}>:
+"${target.text}"
+
+Should Ai-chan reply to this? Output YES or NO.
+`;
+            const judgeResponse = await replyJudgeAgent.generate(judgePrompt);
+            const decision = judgeResponse.text.trim().toUpperCase();
+
+            if (decision !== "YES") {
+                console.log(`[replyService] Skipped replying to ${target.ts} (Judge decided: ${decision})`);
+                continue;
+            }
+
+            // 2. Generate Reply
+            const generatePrompt = `
 Found an inactive post by <@${target.user}>:
 "${target.text}"
 
 Generate a reply to encourage conversation.
 `;
 
-            const response = await replyAgent.generate(prompt);
+            const response = await replyAgent.generate(generatePrompt);
             const replyText = response.text;
 
             await slackClient.chat.postMessage({
