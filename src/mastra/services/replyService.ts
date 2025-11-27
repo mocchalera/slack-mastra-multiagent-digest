@@ -2,6 +2,7 @@ import { slackClient } from "../../slack/client.js";
 import { replyAgent } from "../agents/replyAgent.js";
 import { replyJudgeAgent } from "../agents/replyJudgeAgent.js";
 import { downloadSlackFile } from "../../slack/utils/fileUtils.js";
+import { replyHistoryService } from "./replyHistoryService.js";
 
 const userCache = new Map<string, string>();
 
@@ -151,6 +152,8 @@ Reply to them based on the context above. Ensure you do not repeat points alread
 
 export async function checkAndReplyInactive(channelIds: string[]) {
     console.log("[replyService] Checking for inactive posts...");
+    await replyHistoryService.init();
+
     for (const channelId of channelIds) {
         try {
             const history = await slackClient.conversations.history({
@@ -170,6 +173,11 @@ export async function checkAndReplyInactive(channelIds: string[]) {
                 const now = Date.now() / 1000;
                 if (now - ts > 24 * 60 * 60) return false;
 
+                // Check persistent history (prevent double reply even if API is lagging)
+                if (replyHistoryService.hasRepliedToThread(msg.ts!)) {
+                    return false;
+                }
+
                 return true;
             });
 
@@ -186,6 +194,13 @@ export async function checkAndReplyInactive(channelIds: string[]) {
 
             // Find a truly inactive one
             for (const candidate of shuffled) {
+                // Check user rate limit (e.g., 1 reply per 12 hours per user)
+                // This prevents the bot from obsessively replying to the same person
+                if (!replyHistoryService.shouldReplyToUser(candidate.user!, 12)) {
+                    console.log(`[replyService] Skipping candidate ${candidate.ts} by ${candidate.user} (Rate Limit)`);
+                    continue;
+                }
+
                 const isInactive = await verifyThreadInactive(channelId, candidate.ts!);
                 if (isInactive) {
                     target = candidate;
@@ -274,6 +289,9 @@ Generate a reply to encourage conversation.
                 text: replyText,
                 thread_ts: target.ts,
             });
+
+            // Mark as replied in persistent history
+            await replyHistoryService.markReplied(target.ts!, target.user!);
 
             console.log(`[replyService] Replied to ${target.ts}`);
 
