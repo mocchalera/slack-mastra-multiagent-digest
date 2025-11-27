@@ -259,6 +259,16 @@ Generate a reply to encourage conversation.
             // Handle Reaction
             replyText = await handleReaction(replyText, channelId, target.ts || "");
 
+            // FINAL CHECK: Verify inactivity again before posting to avoid race conditions
+            // Add a small random jitter (1-3s) to desynchronize potential concurrent runs
+            await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+
+            const isStillInactive = await verifyThreadInactive(channelId, target.ts!);
+            if (!isStillInactive) {
+                console.log(`[replyService] Aborting reply to ${target.ts} - thread became active during generation.`);
+                continue;
+            }
+
             await slackClient.chat.postMessage({
                 channel: channelId,
                 text: replyText,
