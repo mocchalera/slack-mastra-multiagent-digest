@@ -62,6 +62,32 @@ async function fetchThreadHistory(channel: string, ts: string): Promise<string> 
     }
 }
 
+async function verifyThreadInactive(channel: string, ts: string): Promise<boolean> {
+    try {
+        const result = await slackClient.conversations.replies({
+            channel,
+            ts,
+            limit: 5, // We only need to know if there are replies
+        });
+
+        if (!result.messages) return true; // No messages found (weird but assume inactive)
+
+        // If there's more than 1 message, it means there are replies (the first one is the parent)
+        // However, we should also check if the replies are from bots or not, but for now,
+        // let's be strict: if there are ANY replies, it's not "inactive" in the sense of "no one touched it".
+        // Or maybe we want to allow bot replies?
+        // Let's stick to the plan: "If messages.length > 1, skip it".
+        if (result.messages.length > 1) {
+            return false;
+        }
+
+        return true;
+    } catch (error) {
+        console.error(`[replyService] Failed to verify thread inactivity for ${ts}:`, error);
+        return false; // Assume active on error to be safe
+    }
+}
+
 // Helper to handle reactions
 async function handleReaction(text: string, channel: string, ts: string): Promise<string> {
     const reactionMatch = text.match(/^\[REACTION: :(.+?):\]/);
@@ -152,8 +178,25 @@ export async function checkAndReplyInactive(channelIds: string[]) {
                 continue;
             }
 
-            // Pick the most recent one
-            const target = candidates[0];
+            // Shuffle candidates to avoid always picking the newest/oldest if multiple exist
+            // This helps with "always replying to the same thread" if the logic was deterministic and flawed
+            const shuffled = candidates.sort(() => 0.5 - Math.random());
+
+            let target: any = null;
+
+            // Find a truly inactive one
+            for (const candidate of shuffled) {
+                const isInactive = await verifyThreadInactive(channelId, candidate.ts!);
+                if (isInactive) {
+                    target = candidate;
+                    break;
+                }
+            }
+
+            if (!target) {
+                console.log(`[replyService] No truly inactive posts found in channel ${channelId} (after verification)`);
+                continue;
+            }
 
             console.log(`[replyService] Found inactive post by ${target.user}: ${target.text}`);
 
@@ -196,11 +239,17 @@ Should Ai-chan reply to this? Output YES or NO.
             }
 
             // 2. Generate Reply
+            const nowJST = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
             const generatePromptText = `
+Current Time: ${nowJST}
+
 Found an inactive post by ${userName}:
 "${target.text}"
 
 Generate a reply to encourage conversation.
+- Consider the current time of day for your greeting (e.g., "Good morning", "Good evening").
+- Avoid repeating the same phrases.
+- Be specific to the content of the post.
 `;
             const generateContent = await getMessageContent(generatePromptText, target.files);
 
