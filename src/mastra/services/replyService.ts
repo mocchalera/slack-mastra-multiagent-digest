@@ -104,7 +104,7 @@ Current Thread History:
 ${history}
 
 User ${userName} said: "${cleanText}"
-Reply to them based on the context above.
+Reply to them based on the context above. Ensure you do not repeat points already made in the history. Maintain the flow and rhythm of the conversation.
 `;
 
     const content = await getMessageContent(promptText, files);
