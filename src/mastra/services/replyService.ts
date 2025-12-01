@@ -63,29 +63,43 @@ async function fetchThreadHistory(channel: string, ts: string): Promise<string> 
     }
 }
 
-async function verifyThreadInactive(channel: string, ts: string): Promise<boolean> {
+async function shouldReplyToThread(channel: string, ts: string, botUserId: string): Promise<boolean> {
     try {
         const result = await slackClient.conversations.replies({
             channel,
             ts,
-            limit: 5, // We only need to know if there are replies
+            limit: 10, // Check last few messages
         });
 
-        if (!result.messages) return true; // No messages found (weird but assume inactive)
+        const messages = result.messages;
+        if (!messages || messages.length === 0) return false;
 
-        // If there's more than 1 message, it means there are replies (the first one is the parent)
-        // However, we should also check if the replies are from bots or not, but for now,
-        // let's be strict: if there are ANY replies, it's not "inactive" in the sense of "no one touched it".
-        // Or maybe we want to allow bot replies?
-        // Let's stick to the plan: "If messages.length > 1, skip it".
-        if (result.messages.length > 1) {
+        // If only 1 message (the parent itself), it's a candidate (no replies yet)
+        if (messages.length === 1) {
+            return true;
+        }
+
+        // If there are replies:
+        const lastMsg = messages[messages.length - 1];
+
+        // 1. Check if last message is from Bot (Prevent consecutive AI replies)
+        if (lastMsg.user === botUserId) {
+            // console.log(`[replyService] Skipping ${ts}: Last reply was by me.`);
+            return false;
+        }
+
+        // 2. Check if last message is old enough (> 6 hours)
+        const lastTs = parseFloat(lastMsg.ts || "0");
+        const now = Date.now() / 1000;
+        if (now - lastTs < 6 * 60 * 60) {
+            // console.log(`[replyService] Skipping ${ts}: Last reply was too recent (${((now - lastTs)/3600).toFixed(1)}h ago).`);
             return false;
         }
 
         return true;
     } catch (error) {
         console.error(`[replyService] Failed to verify thread inactivity for ${ts}:`, error);
-        return false; // Assume active on error to be safe
+        return false;
     }
 }
 
@@ -151,8 +165,25 @@ Reply to them based on the context above. Ensure you do not repeat points alread
 }
 
 export async function checkAndReplyInactive(channelIds: string[]) {
+    // Night time check (00:00 - 06:00 JST)
+    const jstHour = parseInt(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo", hour: "numeric", hourCycle: "h23" }));
+    if (jstHour >= 0 && jstHour < 6) {
+        console.log(`[replyService] Sleeping time (Current JST hour: ${jstHour}). Skipping.`);
+        return;
+    }
+
     console.log("[replyService] Checking for inactive posts...");
     await replyHistoryService.init();
+
+    // Get Bot User ID to prevent consecutive replies
+    let botUserId = "";
+    try {
+        const auth = await slackClient.auth.test();
+        botUserId = auth.user_id || "";
+    } catch (e) {
+        console.error("[replyService] Failed to get bot user id:", e);
+        return;
+    }
 
     for (const channelId of channelIds) {
         try {
@@ -166,17 +197,25 @@ export async function checkAndReplyInactive(channelIds: string[]) {
             const candidates = history.messages.filter((msg) => {
                 // Ignore bots
                 if (msg.bot_id || msg.subtype === "bot_message") return false;
-                // Ignore messages with replies
-                if (msg.reply_count && msg.reply_count > 0) return false;
+
                 // Ignore very old messages (older than 24h)
                 const ts = parseFloat(msg.ts || "0");
                 const now = Date.now() / 1000;
                 if (now - ts > 24 * 60 * 60) return false;
 
-                // Check persistent history (prevent double reply even if API is lagging)
-                if (replyHistoryService.hasRepliedToThread(msg.ts!)) {
-                    return false;
+                // Check replies
+                if (msg.reply_count && msg.reply_count > 0) {
+                    // If it has replies, check if the LAST reply was > 6 hours ago
+                    // Note: latest_reply is the timestamp of the last reply
+                    const lastReplyTs = parseFloat(msg.latest_reply || "0");
+                    if (now - lastReplyTs < 6 * 60 * 60) {
+                        return false; // Too active
+                    }
+                    // If > 6 hours, it's a candidate (we will check WHO replied last in shouldReplyToThread)
                 }
+
+                // Note: We REMOVED the check for replyHistoryService.hasRepliedToThread(msg.ts!)
+                // to allow re-replying if the conversation stalled again.
 
                 return true;
             });
@@ -186,23 +225,17 @@ export async function checkAndReplyInactive(channelIds: string[]) {
                 continue;
             }
 
-            // Shuffle candidates to avoid always picking the newest/oldest if multiple exist
-            // This helps with "always replying to the same thread" if the logic was deterministic and flawed
+            // Shuffle candidates
             const shuffled = candidates.sort(() => 0.5 - Math.random());
 
             let target: any = null;
 
             // Find a truly inactive one
             for (const candidate of shuffled) {
-                // Check user rate limit (e.g., 1 reply per 12 hours per user)
-                // This prevents the bot from obsessively replying to the same person
-                if (!replyHistoryService.shouldReplyToUser(candidate.user!, 12)) {
-                    console.log(`[replyService] Skipping candidate ${candidate.ts} by ${candidate.user} (Rate Limit)`);
-                    continue;
-                }
+                // Note: We REMOVED the user rate limit check (shouldReplyToUser)
 
-                const isInactive = await verifyThreadInactive(channelId, candidate.ts!);
-                if (isInactive) {
+                const shouldReply = await shouldReplyToThread(channelId, candidate.ts!, botUserId);
+                if (shouldReply) {
                     target = candidate;
                     break;
                 }
@@ -228,7 +261,7 @@ Should Ai-chan reply to this? Output YES or NO.
             const judgeContent = await getMessageContent(judgePromptText, target.files);
 
             const judgeResponse = await replyJudgeAgent.generate([{ role: "user", content: judgeContent }]);
-            const decision = judgeResponse.text.trim(); // Don't uppercase yet to preserve emoji case if needed, though usually lowercase
+            const decision = judgeResponse.text.trim();
 
             if (decision.startsWith("REACTION:")) {
                 const reactionMatch = decision.match(/REACTION: :(.+?):/);
@@ -255,8 +288,15 @@ Should Ai-chan reply to this? Output YES or NO.
 
             // 2. Generate Reply
             const nowJST = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+
+            // Fetch thread history for context if it exists
+            const threadHistory = await fetchThreadHistory(channelId, target.ts!);
+
             const generatePromptText = `
 Current Time: ${nowJST}
+
+Thread History:
+${threadHistory}
 
 Found an inactive post by ${userName}:
 "${target.text}"
@@ -274,11 +314,10 @@ Generate a reply to encourage conversation.
             // Handle Reaction
             replyText = await handleReaction(replyText, channelId, target.ts || "");
 
-            // FINAL CHECK: Verify inactivity again before posting to avoid race conditions
-            // Add a small random jitter (1-3s) to desynchronize potential concurrent runs
+            // FINAL CHECK: Verify inactivity again before posting
             await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
 
-            const isStillInactive = await verifyThreadInactive(channelId, target.ts!);
+            const isStillInactive = await shouldReplyToThread(channelId, target.ts!, botUserId);
             if (!isStillInactive) {
                 console.log(`[replyService] Aborting reply to ${target.ts} - thread became active during generation.`);
                 continue;
@@ -290,13 +329,12 @@ Generate a reply to encourage conversation.
                 thread_ts: target.ts,
             });
 
-            // Mark as replied in persistent history
+            // Mark as replied in persistent history (still useful for tracking, even if we don't block)
             await replyHistoryService.markReplied(target.ts!, target.user!);
 
             console.log(`[replyService] Replied to ${target.ts}`);
 
-            // Limit to 1 reply per run per channel to avoid spam
-            // We can remove this break if we want to reply to all, but safer to start slow
+            // Limit to 1 reply per run per channel
         } catch (error) {
             console.error(`[replyService] Error processing channel ${channelId}:`, error);
         }
