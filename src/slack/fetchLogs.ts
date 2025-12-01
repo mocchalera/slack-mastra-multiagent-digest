@@ -1,4 +1,4 @@
-import { slackClient } from "./client";
+import { slackClient } from "./client.js";
 import { ConversationsHistoryResponse } from "@slack/web-api";
 
 // 指定されたチャンネル ID 群から「今日のメッセージ」を取得し、
