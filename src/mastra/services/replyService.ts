@@ -29,7 +29,12 @@ async function getMessageContent(text: string, files: any[] | undefined): Promis
                 try {
                     console.log(`[replyService] Downloading image: ${file.name}`);
                     const imageBuffer = await downloadSlackFile(file.url_private);
-                    content.push({ type: "image", image: imageBuffer });
+
+                    // Convert Buffer to Base64 Data URL
+                    const base64Image = imageBuffer.toString('base64');
+                    const dataUrl = `data:${file.mimetype};base64,${base64Image}`;
+
+                    content.push({ type: "image", image: dataUrl });
                 } catch (error) {
                     console.error(`[replyService] Failed to download image ${file.name}:`, error);
                 }
