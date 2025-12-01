@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { slackClient } from "../slack/client";
+import { slackClient } from "../slack/client.js";
 
 // Usage: npx ts-node src/scripts/deleteMessage.ts <CHANNEL_ID> <TIMESTAMP>
 // Example: npx ts-node src/scripts/deleteMessage.ts C07PKT9QBML 1732694937.562629

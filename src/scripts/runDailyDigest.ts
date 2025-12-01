@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { generateAndPostDigest } from "../mastra/services/digestService";
+import { generateAndPostDigest } from "../mastra/services/digestService.js";
 
 async function main() {
   const channelIdsEnv = process.env.SLACK_CHANNEL_IDS;

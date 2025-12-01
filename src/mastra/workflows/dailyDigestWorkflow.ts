@@ -1,6 +1,6 @@
 import { createWorkflow, createStep } from "@mastra/core/workflows";
 import { z } from "zod";
-import { ResourceSchema, AwardSchema } from "../schemas/digestSchemas";
+import { ResourceSchema, AwardSchema } from "../schemas/digestSchemas.js";
 
 // dailyDigestWorkflow:
 //  - input: logs (1 日分 Slack ログのテキスト), persona
