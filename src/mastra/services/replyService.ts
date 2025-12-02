@@ -27,16 +27,18 @@ async function getMessageContent(text: string, files: any[] | undefined): Promis
         for (const file of files) {
             if (file.mimetype?.startsWith("image/") && file.url_private) {
                 try {
-                    console.log(`[replyService] Downloading image: ${file.name}`);
-                    const imageBuffer = await downloadSlackFile(file.url_private);
+                    console.log(`[replyService] Downloading image: ${file.name} (mimetype: ${file.mimetype})`);
+                    const imageBuffer = await downloadSlackFile(file.url_private, file.mimetype);
 
                     // Convert Buffer to Base64 Data URL
                     const base64Image = imageBuffer.toString('base64');
                     const dataUrl = `data:${file.mimetype};base64,${base64Image}`;
 
                     content.push({ type: "image", image: dataUrl });
+                    console.log(`[replyService] Successfully processed image: ${file.name} (${imageBuffer.length} bytes)`);
                 } catch (error) {
-                    console.error(`[replyService] Failed to download image ${file.name}:`, error);
+                    console.warn(`[replyService] Skipping image ${file.name} due to download/validation error:`, error instanceof Error ? error.message : error);
+                    // Continue without this image - don't fail the whole request
                 }
             }
         }
