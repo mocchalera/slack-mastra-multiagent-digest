@@ -75,7 +75,7 @@ async function shouldReplyToThread(channel: string, ts: string, botUserId: strin
         const result = await slackClient.conversations.replies({
             channel,
             ts,
-            limit: 10, // Check last few messages
+            limit: 100, // Increase limit to ensure we get the latest message in longer threads
         });
 
         const messages = result.messages;
@@ -86,8 +86,9 @@ async function shouldReplyToThread(channel: string, ts: string, botUserId: strin
 
         // CRITICAL: Always check if the last message in the thread is from the bot
         // This prevents consecutive AI replies (連投防止)
-        if (lastMsg.user === botUserId) {
-            console.log(`[replyService] Skipping ${ts}: Last message was from bot (preventing consecutive replies).`);
+        // Check both user ID and bot_id/subtype to be safe
+        if (lastMsg.user === botUserId || lastMsg.bot_id || lastMsg.subtype === "bot_message") {
+            console.log(`[replyService] Skipping ${ts}: Last message was from bot/me (preventing consecutive replies).`);
             return false;
         }
 
