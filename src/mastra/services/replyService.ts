@@ -81,21 +81,23 @@ async function shouldReplyToThread(channel: string, ts: string, botUserId: strin
         const messages = result.messages;
         if (!messages || messages.length === 0) return false;
 
+        // Get the last message (either the parent itself or the last reply)
+        const lastMsg = messages[messages.length - 1];
+
+        // CRITICAL: Always check if the last message in the thread is from the bot
+        // This prevents consecutive AI replies (連投防止)
+        if (lastMsg.user === botUserId) {
+            console.log(`[replyService] Skipping ${ts}: Last message was from bot (preventing consecutive replies).`);
+            return false;
+        }
+
         // If only 1 message (the parent itself), it's a candidate (no replies yet)
+        // Note: We already verified the parent isn't from the bot above
         if (messages.length === 1) {
             return true;
         }
 
-        // If there are replies:
-        const lastMsg = messages[messages.length - 1];
-
-        // 1. Check if last message is from Bot (Prevent consecutive AI replies)
-        if (lastMsg.user === botUserId) {
-            // console.log(`[replyService] Skipping ${ts}: Last reply was by me.`);
-            return false;
-        }
-
-        // 2. Check if last message is old enough (> 6 hours)
+        // If there are replies, check if the last message is old enough (> 6 hours)
         const lastTs = parseFloat(lastMsg.ts || "0");
         const now = Date.now() / 1000;
         if (now - lastTs < 6 * 60 * 60) {
