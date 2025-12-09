@@ -1,6 +1,17 @@
 import * as crypto from 'crypto';
 import { handleMention } from '../../src/mastra/services/replyService.js';
 
+// In-flight deduplication to prevent processing the same event twice
+const processedEvents = new Set<string>();
+
+// Clean up old entries periodically
+function cleanupProcessedEvents() {
+    // Simple cleanup: clear if too many entries (memory safety for serverless)
+    if (processedEvents.size > 1000) {
+        processedEvents.clear();
+    }
+}
+
 export default async function handler(req: any, res: any) {
     console.log("[Events API] Received request:", req.method);
 
@@ -9,7 +20,7 @@ export default async function handler(req: any, res: any) {
             return res.status(405).json({ error: 'Method not allowed' });
         }
 
-        // Check for retries
+        // Check for retries - Slack sends retries if we don't respond within 3 seconds
         if (req.headers['x-slack-retry-num']) {
             console.log("[Events API] Ignoring retry:", req.headers['x-slack-retry-num']);
             return res.status(200).json({ ok: true });
@@ -48,22 +59,46 @@ export default async function handler(req: any, res: any) {
 
             if (!crypto.timingSafeEqual(Buffer.from(mySignature), Buffer.from(signature))) {
                 console.warn('[Events API] Signature verification failed');
-                // return res.status(401).json({ error: 'Invalid signature' });
+                return res.status(401).json({ error: 'Invalid signature' });
             }
         }
 
         // 3. Handle Events
         if (body && body.event) {
             const event = body.event;
-            console.log("[Events API] Event type:", event.type);
+            const eventId = body.event_id;
+            console.log("[Events API] Event type:", event.type, "Event ID:", eventId);
+
+            // De-duplication: Check if we've already processed this event
+            if (eventId && processedEvents.has(eventId)) {
+                console.log("[Events API] Already processed event:", eventId);
+                return res.status(200).json({ ok: true, deduplicated: true });
+            }
 
             // Handle App Mention
             if (event.type === 'app_mention') {
+                // Mark event as being processed BEFORE responding
+                if (eventId) {
+                    processedEvents.add(eventId);
+                    cleanupProcessedEvents();
+                }
+
+                // IMPORTANT: Respond immediately to Slack to prevent retry
+                // Slack expects a response within 3 seconds
+                // We'll process the mention in the background
+                res.status(200).json({ ok: true });
+
+                // Now process the mention after responding
+                // Note: In Vercel serverless, the function continues to run briefly after response
                 try {
+                    console.log("[Events API] Processing mention in background...");
                     await handleMention(event);
+                    console.log("[Events API] Mention processed successfully");
                 } catch (error) {
                     console.error('[Events API] Error handling mention:', error);
+                    // Event already responded with 200, so we can only log the error
                 }
+                return; // Already responded
             }
         }
 
